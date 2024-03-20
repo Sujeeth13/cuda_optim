@@ -76,6 +76,7 @@ int main(int argc, char** argv)
     // Allocate vectors in device memory.
     cudaError_t error;
     error = cudaMalloc((void**)&d_A, size);
+    printf(cudaGetErrorString(error));
     if (error != cudaSuccess) Cleanup(false);
     error = cudaMalloc((void**)&d_B, size);
     if (error != cudaSuccess) Cleanup(false);
