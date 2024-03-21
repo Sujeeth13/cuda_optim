@@ -15,84 +15,51 @@
 
 #include "matmultKernel.h"
 
-#define FOOTPRINT_SIZE BLOCK_SIZE
-
 // Define a gpu kernel to perform matrix multiplication
 // of A x B = C.
-__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C){
+#define S FOOTPRINT_SIZE/BLOCK_SIZE
 
-  // matrix blocks
-  float *Asub, *Bsub, *Csub;
-  // Putting these into registers speeds access.
-  int thread_row = threadIdx.y;
-  int thread_col = threadIdx.x;
-  int block_row = blockIdx.y;
-  int block_col = blockIdx.x;
-
-  // Each THREAD BLOCK computes one sub matrix Csub of C
-  // EACH THREAD creates its own matrix descriptor Csub
-  Csub = &C.elements[C.stride * BLOCK_SIZE * block_row + BLOCK_SIZE * block_col];
-
-  // Each thread computes one element of Csub in its copy of CValue
-  float Cvalue = 0;
-
-  // Loop over all sub matrices in block_row of A and block_col of B
-  // required to compute Csub. Block multiply each pair of sub matrices
-  // and accumulate results
-  for (int m = 0;  m < (A.width / BLOCK_SIZE); ++m){
-    // Get Asub and Bsub descriptors
-    Asub = &A.elements[A.stride * BLOCK_SIZE * block_row + BLOCK_SIZE * m];
-    Bsub = &B.elements[B.stride * BLOCK_SIZE * m + BLOCK_SIZE * block_col];
-
-    // Copy ELEMENTS OF  ASub and Bsub into shared memory
-    // EACH THREAD loads ONE ELEMENT of ASub and ONE of Bsub
-    // Notice: it does not need to be the element it requires to
-    //         compute its Cvalue, as long as all elements are 
-    //         collaboratively read. 
-
-    // Notice: every thread declares shared_A and shared_B in shared memory
-    //         even though a thread block has only one shared_A and one shared_B
-    __shared__ float shared_A[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float shared_B[BLOCK_SIZE][BLOCK_SIZE];
-
-    // Each thread copies just one element of shared_A and one element of shared_B
-    shared_A[thread_row][thread_col] = Asub[thread_row * A.stride + thread_col];
-    shared_B[thread_row][thread_col] = Bsub[thread_row * B.stride + thread_col];
-
-    // Synchronize to ensure all elements are read
-    __syncthreads();
-
-    // Do an inproduct of one row of shared_A and one col of shared_B
-    // computing one Cvalue by accumulation
-#pragma unroll
-    for(int e=0; e<BLOCK_SIZE; ++e)
-       Cvalue += shared_A[thread_row][e] * shared_B[e][thread_col];
-
-    // Synchronize to ensure all Cvalues have been incremented
-    // before reading in the next shared_A AND shared_B BLOCKS
-    __syncthreads();
-  }
-
-  // Write Csub to GLOBAL memory.
-  // Each thread writes its own cell value.
-  Csub[thread_row * C.stride + thread_col] = Cvalue;
-}
-
-__global__ void MyMatMul(const Matrix A, const Matrix B, Matrix C){
+__global__ void MatMulKernel(const Matrix A, const Matrix B, Matrix C){
     float *A_sub,*B_sub,*C_sub; // stores the block values of the matrix
 
-    int thread_row = threadIdx.x;
-    int thread_col = threadIdx.y;
-    int block_row = blockIdx.x;
-    int block_col = blockIdx.y;
+    int thread_row = threadIdx.y;
+    int thread_col = threadIdx.x;
+    int block_row = blockIdx.y;
+    int block_col = blockIdx.x;
 
     C_sub = &C.elements[C.width * FOOTPRINT_SIZE * block_row + FOOTPRINT_SIZE * block_col];
 
-    float CValue[4];
+    float CValue[S*S];
+  #pragma unroll
+    for (int s=0; s<S*S; s++)
+      CValue[s] = 0;
 
-    for (int m = 0;  m < (A.width / BLOCK_SIZE); ++m) {
-        for (int s = 0; s < 4; s++) {
-            
+    for (int m = 0;  m < (A.width / FOOTPRINT_SIZE); ++m) {
+      
+      A_sub = &A.elements[A.width * FOOTPRINT_SIZE * block_row + FOOTPRINT_SIZE * m];
+      B_sub = &B.elements[B.width * FOOTPRINT_SIZE * m + FOOTPRINT_SIZE * block_col];
+
+      __shared__ float shared_A[FOOTPRINT_SIZE][FOOTPRINT_SIZE];
+      __shared__ float shared_B[FOOTPRINT_SIZE][FOOTPRINT_SIZE];
+
+#pragma unroll
+      for (int s=0; s< S*S ; ++s) {
+        shared_A[thread_row][thread_col*S*S+s] = A_sub[thread_row*A.width + thread_col*S*S + s];
+        shared_B[thread_row][thread_col*S*S+s] = B_sub[thread_row*B.width + thread_col*S*S + s];
+      }
+      
+      __syncthreads();
+
+      for (int s = 0; s < S*S; ++s) {
+        for (int e=0; e<FOOTPRINT_SIZE; ++e) {
+          CValue[s] += shared_A[thread_row][e] * shared_B[e][thread_col*S*S + s];
         }
+      }
     }
+    __syncthreads();
+
+#pragma unroll
+    for(int s=0; s<S*S; ++s) {
+      C_sub[thread_row*C.width + thread_col*S*S + s] = CValue[s];
+    } 
 }
