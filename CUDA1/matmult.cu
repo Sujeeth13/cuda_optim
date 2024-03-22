@@ -184,7 +184,9 @@ int main(int argc, char** argv) {
   } else {
      printf("Usage: %s NumBlocks\n", argv[0]);
      exit(0);
-  }     
+  }    
+
+  printf("%d,%d",FOOTPRINT_SIZE,BLOCK_SIZE); 
 
   // Create matrices in host.
   Matrix host_A = MakeHostMatrix(data_size, data_size);
