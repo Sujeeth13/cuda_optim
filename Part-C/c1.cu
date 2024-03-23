@@ -11,14 +11,13 @@ __global__ void Conv2d(const double *I,const double *F,double* O,int C,int K, in
     int block_col = blockIdx.y;
     int thread_row = threadIdx.x;
     int thread_col = threadIdx.y;
-    // int M = blockDim.x;
-    // int N = blockDim.y;
+
     double OValue = 0;
 
     for(int c=0; c<C; ++c) {
         for(int i = 0; i<FH; ++i) {
             for(int j=0; j<FW; ++j) {
-                OValue += I[c*(HP*WP) + block_row*WP*BLOCK_SIZE + block_col*BLOCK_SIZE + (thread_row+i)*WP + thread_col+j] * F[k*(C*FH*FW) + c*(FH*FW) + (FH-i)*FW + (FW-j)];
+                OValue += I[c*(HP*WP) + block_row*WP*BLOCK_SIZE + block_col*BLOCK_SIZE + (thread_row+i)*WP + thread_col+j] * F[k*(C*FH*FW) + c*(FH*FW) + (FH-1-i)*FW + (FW-1-j)];
             }
         }
     }
@@ -100,6 +99,8 @@ int main(int argc,char *argv[]) {
     }
     // kernel code
     dim3 gridDim((H + BLOCK_SIZE -1)/BLOCK_SIZE, (W + BLOCK_SIZE - 1)/BLOCK_SIZE,K);
+    // dim3 gridDim(256,256);
+    // dim3 blockDim(4,4,K);
     dim3 blockDim(BLOCK_SIZE,BLOCK_SIZE);
     Conv2d<<<gridDim,blockDim>>>(d_I,d_F,d_O,C,K,H,W,HP,WP,FH,FW);
     cudaDeviceSynchronize();

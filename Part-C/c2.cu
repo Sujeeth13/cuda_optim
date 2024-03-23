@@ -15,12 +15,12 @@ __global__ void Conv2d(const double *I,double* O,int C,int K, int H,int W,int HP
     int thread_col = threadIdx.y;
 
     double OValue = 0;
-    __shared__ shared_I[C*(FW + 2*(BLOCK_SIZE - 1)) * (FH + 2*(BLOCK_SIZE - 1))];
+    extern __shared__ double shared_I[];
 
     for(int c=0; c<C; ++c) {
-        for(int i=0; i<FH + 2*(BLOCK_SIZE - 1); ++i) {
-            for(int j=0;j<FW + 2*(BLOCK_SIZE - 1);++j)
-                shared_I[c*(FW + 2*(BLOCK_SIZE - 1)) * (FH + 2*(BLOCK_SIZE - 1)) + i*(FW + 2*(BLOCK_SIZE - 1)) + j] = I[c*(HP*WP) + ];
+        for(int i=0; i<FH + (BLOCK_SIZE - 1); ++i) {
+            for(int j=0;j<FW + (BLOCK_SIZE - 1);++j)
+                shared_I[c*(FW + (BLOCK_SIZE - 1)) * (FH + (BLOCK_SIZE - 1)) + i*(FW + (BLOCK_SIZE - 1)) + j] = I[c*(HP*WP) + block_row*WP*BLOCK_SIZE + block_col*BLOCK_SIZE + i*WP + j];
         }
     }
 
@@ -28,7 +28,7 @@ __global__ void Conv2d(const double *I,double* O,int C,int K, int H,int W,int HP
     for(int c=0; c<C; ++c) {
         for(int i = 0; i<FH; ++i) {
             for(int j=0; j<FW; ++j) {
-                OValue += I[c*(HP*WP) + block_row*WP*BLOCK_SIZE + block_col*BLOCK_SIZE + (thread_row+i)*WP + thread_col+j] * constFilter[k*(C*FH*FW) + c*(FH*FW) + (FH-i)*FW + (FW-j)];
+                OValue += shared_I[c*(FW + (BLOCK_SIZE - 1)) * (FH + (BLOCK_SIZE - 1)) + (thread_row+i)*(FW + (BLOCK_SIZE - 1)) + thread_col+j] * constFilter[k*(C*FH*FW) + c*(FH*FW) + (FH-1-i)*FW + (FW-1-j)];
             }
         }
     }
@@ -108,7 +108,8 @@ int main(int argc,char *argv[]) {
     // kernel code
     dim3 gridDim((H + BLOCK_SIZE -1)/BLOCK_SIZE, (W + BLOCK_SIZE - 1)/BLOCK_SIZE,K);
     dim3 blockDim(BLOCK_SIZE,BLOCK_SIZE);
-    Conv2d<<<gridDim,blockDim>>>(d_I,d_O,C,K,H,W,HP,WP,FH,FW);
+    int sharedMemSize = C*(FW + (BLOCK_SIZE - 1)) * (FH + (BLOCK_SIZE - 1))*sizeof(double);
+    Conv2d<<<gridDim,blockDim,sharedMemSize>>>(d_I,d_O,C,K,H,W,HP,WP,FH,FW);
     cudaDeviceSynchronize();
 
     cudaError_t err = cudaGetLastError();
