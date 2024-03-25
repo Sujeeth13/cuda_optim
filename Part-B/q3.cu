@@ -24,8 +24,10 @@ __global__ void addNx256(int N, const float* A,const float* B, float* C) {
 
 int main(int argc, char *argv[]) {
     int K=1;
-    if(argc == 2) {
+    int scen=1;
+    if(argc == 3) {
         K = atoi(argv[1]);
+        scen = atoi(argv[2]);
     }
     int N = K*1e6;
 
@@ -54,44 +56,45 @@ int main(int argc, char *argv[]) {
         B[i] = (float)i;
         C[i] = 0;
     }
-    // warm up
-    add1x1<<<1,1>>>(N,A,B,C);
-    add1x256<<<1,256>>>(N,A,B,C);
-    addNx256<<<((N + 255)/256),256>>>(N,A,B,C);
-    cudaDeviceSynchronize();
 
-    // profiling of 1,1 kernel
-    gettimeofday(&time, NULL);
-    start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+    if (scen == 1) {
+        // profiling of 1,1 kernel
+        gettimeofday(&time, NULL);
+        start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
 
-    add1x1<<<1,1>>>(N,A,B,C);
-    cudaDeviceSynchronize();
+        add1x1<<<1,1>>>(N,A,B,C);
+        cudaDeviceSynchronize();
 
-    gettimeofday(&time, NULL);
-    end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
-    printf("Time taken by the 1x1 kernel: %lf\n",(end-start));
+        gettimeofday(&time, NULL);
+        end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+        printf("Time taken by the 1x1 kernel: %lf\n",(end-start));
+    }
 
-    // profiling of 1,256 kernel
-    gettimeofday(&time, NULL);
-    start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+    else if (scen == 2) {
+        // profiling of 1,256 kernel
+        gettimeofday(&time, NULL);
+        start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
 
-    add1x256<<<1,256>>>(N,A,B,C);
-    cudaDeviceSynchronize();
+        add1x256<<<1,256>>>(N,A,B,C);
+        cudaDeviceSynchronize();
 
-    gettimeofday(&time, NULL);
-    end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
-    printf("Time taken by the 1x256 kernel: %lf\n",(end-start));
+        gettimeofday(&time, NULL);
+        end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+        printf("Time taken by the 1x256 kernel: %lf\n",(end-start));
+    }
 
-    // profiling of N,256 kernel
-    gettimeofday(&time, NULL);
-    start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+    else if (scen == 3) {
+        // profiling of N,256 kernel
+        gettimeofday(&time, NULL);
+        start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
 
-    addNx256<<<((N + 255)/256),256>>>(N,A,B,C);
-    cudaDeviceSynchronize();
+        addNx256<<<((N + 255)/256),256>>>(N,A,B,C);
+        cudaDeviceSynchronize();
 
-    gettimeofday(&time, NULL);
-    end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
-    printf("Time taken by the Nx256 kernel: %lf\n",(end-start));
+        gettimeofday(&time, NULL);
+        end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+        printf("Time taken by the Nx256 kernel: %lf\n",(end-start));
+    }
 
     cudaFree(A);
     cudaFree(B);

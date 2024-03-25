@@ -186,8 +186,6 @@ int main(int argc, char** argv) {
      exit(0);
   }    
 
-  printf("%d,%d",FOOTPRINT_SIZE,BLOCK_SIZE); 
-
   // Create matrices in host.
   Matrix host_A = MakeHostMatrix(data_size, data_size);
   Matrix host_B = MakeHostMatrix(data_size, data_size);

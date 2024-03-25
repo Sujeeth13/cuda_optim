@@ -75,18 +75,18 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     int block_col = blockIdx.x;
 
     // Adjusting for the new FOOTPRINT_SIZE
-    float *Csub = &C.elements[C.stride * 32 * block_row + 32 * block_col];
+    float *Csub = &C.elements[C.stride * FOOTPRINT_SIZE * block_row + FOOTPRINT_SIZE * block_col];
     float Cvalues[4] = {0.0, 0.0, 0.0, 0.0};  // To hold the computed values
 
-    for (int m = 0; m < (A.width / 32); ++m) {
-        float *Asub = &A.elements[A.stride * 32 * block_row + 32 * m];
-        float *Bsub = &B.elements[B.stride * 32 * m + 32 * block_col];
+    for (int m = 0; m < (A.width / FOOTPRINT_SIZE); ++m) {
+        float *Asub = &A.elements[A.stride * FOOTPRINT_SIZE * block_row + FOOTPRINT_SIZE * m];
+        float *Bsub = &B.elements[B.stride * FOOTPRINT_SIZE * m + FOOTPRINT_SIZE * block_col];
 
-        __shared__ float shared_A[32][32];  // Adjusted for FOOTPRINT_SIZE = 32
-        __shared__ float shared_B[32][32];  // Adjusted for FOOTPRINT_SIZE = 32
+        __shared__ float shared_A[FOOTPRINT_SIZE][FOOTPRINT_SIZE];  // Adjusted for FOOTPRINT_SIZE = 32
+        __shared__ float shared_B[FOOTPRINT_SIZE][FOOTPRINT_SIZE];  // Adjusted for FOOTPRINT_SIZE = 32
         // Load A_sub and B_sub into shared memory, ensuring coalesced access
-        for(int i = 0; i < 2; ++i) {  // Load 2 rows
-            for(int j = 0; j < 2; ++j) {  // And 2 columns per thread
+        for(int i = 0; i < S; ++i) {  // Load 2 rows
+            for(int j = 0; j < S; ++j) {  // And 2 columns per thread
                 shared_A[thread_row + i][thread_col + j] = Asub[(thread_row + i) * A.stride + (thread_col + j)];
                 shared_B[thread_row + i][thread_col + j] = Bsub[(thread_row + i) * B.stride + (thread_col + j)];
             }
@@ -95,11 +95,11 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         __syncthreads();
 
         // Compute 4 elements of C per thread
-        for(int y = 0; y < 2; ++y) {
-            for(int x = 0; x < 2; ++x) {
+        for(int y = 0; y < S; ++y) {
+            for(int x = 0; x < S; ++x) {
 #pragma unroll
-                for(int e = 0; e < 32; ++e) {
-                    Cvalues[y * 2 + x] += shared_A[thread_row + y][e] * shared_B[e][thread_col + x];
+                for(int e = 0; e < FOOTPRINT_SIZE; ++e) {
+                    Cvalues[y * S + x] += shared_A[thread_row + y][e] * shared_B[e][thread_col + x];
                 }
             }
         }
@@ -108,9 +108,9 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     }
 
     // Write the 4 computed values back to global memory
-    for(int i = 0; i < 2; ++i) {
-        for(int j = 0; j < 2; ++j) {
-            Csub[(thread_row + i) * C.stride + thread_col + j] = Cvalues[i * 2 + j];
+    for(int i = 0; i < S; ++i) {
+        for(int j = 0; j < S; ++j) {
+            Csub[(thread_row + i) * C.stride + thread_col + j] = Cvalues[i * S + j];
         }
     }
 }

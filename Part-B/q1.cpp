@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <chrono>
+#include <sys/time.h>
 
 void add(const int N,const float* A, const float* B, float*& C) 
 {
@@ -13,6 +14,8 @@ int main(int argc, char* argv[]) {
     if (argc == 2) {
         K = std::stoi(argv[1]);
     }
+    struct timeval time;
+    double start,end;
     float *A, *B, *C;
     int N = K*1e6;
     A = (float*)malloc(N*sizeof(float));
@@ -26,18 +29,16 @@ int main(int argc, char* argv[]) {
         B[i] = i;
     }
 
-    /* warm up */
-    add(N,A,B,C);
-
     // Profiling begins
-    auto start = std::chrono::high_resolution_clock::now();
+    gettimeofday(&time, NULL);
+    start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
     
     add(N, A, B, C);
 
-    auto end = std::chrono::high_resolution_clock::now();
+    gettimeofday(&time, NULL);
+    end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
 
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Time taken for addition: " << (float)duration/1e6 << " s" << std::endl;
+    std::cout << "Time taken for addition: " << (end - start) << " s" << std::endl;
 
     free(A);
     free(B);

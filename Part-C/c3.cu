@@ -1,6 +1,7 @@
 #include <cudnn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 double getCheckSum(const double *h_O, int K, int H, int W) {
     double sum = 0.0;
@@ -15,7 +16,9 @@ double getCheckSum(const double *h_O, int K, int H, int W) {
 }
 
 int main(int argc, char *argv[]) {
-    // Your existing initialization code here...
+    struct timeval time;
+    double start,end;
+
     int H=1024,W=1024,C=3,FW=3,FH=3,K = 64;
     int P = 1;
     int HP = H + 2*P;
@@ -41,7 +44,6 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-    printf("INIT MATRIX DONE\n");
 
     //init kernel
     for(int k=0; k<K; ++k) {
@@ -53,7 +55,6 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-    printf("INIT KERNEL DONE\n");
 
     if (cudaMalloc((void**)&d_I,size*sizeof(double)) != cudaSuccess) {
         printf("Failed to allocate GPU memory to I\n");
@@ -140,12 +141,18 @@ int main(int argc, char *argv[]) {
         printf("Error: Unable to allocate workspace memory\n");
         exit(1);
     }
-    
+
+    gettimeofday(&time, NULL);
+    start = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
+
     const double alpha = 1.0, beta = 0.0;
     if (cudnnConvolutionForward(cudnn, &alpha, inp, d_I, filter, d_F, convolutionDescriptor, convolutionAlgorithm, d_workspace, workspaceBytes, &beta, out, d_O) != CUDNN_STATUS_SUCCESS) {
         printf("Error: Unable to compute convolution\n");
         exit(1);
     }
+
+    gettimeofday(&time, NULL);
+    end = (((double) time.tv_sec) + ((double) time.tv_usec)/1000000);
 
     if(cudaMemcpy(O,d_O,o_size*sizeof(double),cudaMemcpyDeviceToHost) != cudaSuccess) {
         printf("Failed to copy O from device to host\n");
@@ -153,7 +160,7 @@ int main(int argc, char *argv[]) {
     }
 
     double checksum = getCheckSum(O,K,H,W);
-    printf("Checksum: %.3lf\n",checksum);
+    printf("%.3lf,%.3lf\n",checksum,(end-start)*1e3);
 
     cudaFree(d_I);
     cudaFree(d_O);
